@@ -1,0 +1,274 @@
+name: Harmonoid
+on:
+  push:
+    branches:
+      - master
+      - stable
+  workflow_dispatch:
+
+jobs:
+  build_windows:
+    name: Harmonoid Windows
+    env:
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.ACCESS_TOKEN }}
+          submodules: recursive
+      - name: Set Git Commit Hash
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Check Git Commit Hash
+        run: echo ${{ steps.vars.outputs.sha_short }}
+      - uses: subosito/flutter-action@v1
+        with:
+          # TODO (@alexmercerind): Revert to stable once Flutter 3.5.x rolls out.
+          channel: "master"
+
+      - run: |
+          rmdir /s /q "assets/fonts"
+          mkdir "assets/fonts"
+        shell: cmd
+
+      - run: git config --system core.longpaths true
+
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows
+
+      - name: Create PFX
+        id: create_pfx
+        uses: timheuer/base64-to-file@v1
+        with:
+          fileName: "certificate.pfx"
+          encodedString: ${{ secrets.CERTIFICATE }}
+
+      - run: |
+          "%programfiles(x86)%\Windows Kits\10\App Certification Kit\signtool.exe" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f "${{ steps.create_pfx.outputs.filePath }}" /p ${{ secrets.PASSWORD }} "build/windows/runner/Release/harmonoid.exe"
+        shell: cmd
+      - run: cp -r build/windows/runner/Release harmonoid-windows-exe
+      - run: tar.exe -a -c -f harmonoid-windows-exe.zip harmonoid-windows-exe
+
+      - run: |
+          "%programfiles(x86)%\Inno Setup 6\iscc.exe" "Harmonoid_InnoSetup.iss"
+        shell: cmd
+      - run: |
+          "%programfiles(x86)%\Windows Kits\10\App Certification Kit\signtool.exe" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f "${{ steps.create_pfx.outputs.filePath }}" /p ${{ secrets.PASSWORD }} "Output/harmonoid-windows-setup.exe"
+        shell: cmd
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_REPOSITORY: alexmercerind2/_
+        with:
+          repository: alexmercerind2/_
+          draft: true
+          prerelease: false
+          body: ""
+          tag_name: "vnext"
+          files: |
+            Output/harmonoid-windows-setup.exe
+            harmonoid-windows-exe.zip
+          token: ${{ secrets.ACCESS_TOKEN_2 }}
+      - name: Release Nightly
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_REPOSITORY: harmonoid/harmonoid-nightly
+        with:
+          repository: harmonoid/harmonoid-nightly
+          draft: false
+          prerelease: true
+          body: ${{ github.sha }}
+          tag_name: nightly
+          files: |
+            Output/harmonoid-windows-setup.exe
+            harmonoid-windows-exe.zip
+          token: ${{ secrets.ACCESS_TOKEN_2 }}
+
+  build_linux:
+    name: Harmonoid Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.ACCESS_TOKEN }}
+          submodules: recursive
+      - name: Set Git Commit Hash
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Check Git Commit Hash
+        run: echo ${{ steps.vars.outputs.sha_short }}
+      - uses: subosito/flutter-action@v1
+        with:
+          # TODO (@alexmercerind): Revert to stable once Flutter 3.5.x rolls out.
+          channel: "master"
+
+      - run: sudo apt-get update
+      - run: sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev mpv libmpv-dev dpkg-dev rpm tree
+
+      - run: rm -r "assets/icons"
+      - run: mkdir "assets/icons"
+      - run: rm pubspec.yaml
+      - run: mv pubspec.linux.yaml pubspec.yaml
+
+      - name: Compile Tagger
+        run: |
+          cd external/media_engine
+          git apply --reject --whitespace=fix ../../patches/media-engine.patch
+          dart pub get
+          cd example
+          dart compile exe cli.dart
+          mv cli.exe tagger
+          mkdir ../../../assets/platform
+          mv tagger ../../../assets/platform
+          tree ../../../assets
+
+      - run: flutter config --enable-linux-desktop
+      - run: flutter pub get
+      - run: flutter build linux --verbose
+
+      - run: chmod +x build/linux/x64/release/bundle/data/flutter_assets/assets/platform/tagger
+
+      - name: Build RPM Package
+        run: |
+          cp -fr build/linux/x64/release/bundle linux/debian/usr/share/harmonoid
+          mkdir linux/debian/usr/bin
+          ln -sr linux/debian/usr/share/harmonoid/harmonoid linux/debian/usr/bin/harmonoid
+          sed -i "s:cp -rf :cp -rf $(pwd)/:" linux/rpm/harmonoid.spec
+          cd linux/debian
+          sed -i "s:FILES_HERE:$(find usr \( -type l -o -type f \) -follow -print | awk '{printf "/%s\\n", $0}'):" ../rpm/harmonoid.spec
+          cd ../../
+          rpmbuild -bb linux/rpm/harmonoid.spec -D "_topdir $(pwd)/rpmbuild"
+          cp rpmbuild/RPMS/x86_64/*.rpm harmonoid-linux-x86_64.rpm
+
+      - name: Build DEB Package
+        run: |
+          dpkg-deb --build --root-owner-group linux/debian
+          cp linux/*.deb harmonoid-linux-x86_64.deb
+
+      - name: Build Tarball
+        run: |
+          mkdir -p AppDir/
+          cp -r linux/debian/usr AppDir/
+          ln -sr AppDir/usr/bin/harmonoid AppDir/harmonoid
+          tar czf harmonoid-linux-x86_64.tar.gz -C AppDir/ .
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_REPOSITORY: alexmercerind2/_
+        with:
+          repository: alexmercerind2/_
+          draft: true
+          prerelease: false
+          body: ""
+          tag_name: "vnext"
+          files: harmonoid-linux-*
+          token: ${{ secrets.ACCESS_TOKEN_2 }}
+      - name: Release Nightly
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_REPOSITORY: harmonoid/harmonoid-nightly
+        with:
+          repository: harmonoid/harmonoid-nightly
+          draft: false
+          prerelease: true
+          body: ${{ github.sha }}
+          tag_name: nightly
+          files: harmonoid-linux-*
+          token: ${{ secrets.ACCESS_TOKEN_2 }}
+
+  build_android:
+    name: Harmonoid Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.ACCESS_TOKEN }}
+          submodules: recursive
+      - name: Set Git Commit Hash
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Check Git Commit Hash
+        run: echo ${{ steps.vars.outputs.sha_short }}
+      - uses: subosito/flutter-action@v1
+        with:
+          # TODO (@alexmercerind): Revert to stable once Flutter 3.5.x rolls out.
+          channel: "master"
+
+      - name: Create Key Store
+        id: create_key_store
+        uses: timheuer/base64-to-file@v1
+        with:
+          fileName: "keystore.pfx"
+          encodedString: ${{ secrets.KEY_STORE }}
+
+      - name: Create Key Properties
+        id: create_key_properties
+        uses: timheuer/base64-to-file@v1
+        with:
+          fileName: "key.properties"
+          encodedString: ${{ secrets.KEY_PROPERTIES }}
+
+      - run: cp "${{ steps.create_key_store.outputs.filePath }}" android/app/keystore.jks
+      - run: cp "${{ steps.create_key_properties.outputs.filePath }}" android/key.properties
+
+      - run: rm -r "assets/fonts"
+      - run: mkdir "assets/fonts"
+      - run: rm -r "assets/icons"
+      - run: mkdir "assets/icons"
+      - run: rm -r "assets/preloaded_visuals"
+      - run: mkdir "assets/preloaded_visuals"
+
+      - run: flutter pub get
+      - run: flutter build apk --verbose --split-per-abi
+      - run: cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk harmonoid-android-arm64-v8a-release.apk
+      - run: cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk harmonoid-android-armeabi-v7a-release.apk
+      - run: cp build/app/outputs/flutter-apk/app-x86_64-release.apk harmonoid-android-x86_64-release.apk
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_REPOSITORY: alexmercerind2/_
+        with:
+          repository: alexmercerind2/_
+          draft: true
+          prerelease: false
+          body: ""
+          tag_name: "vnext"
+          files: |
+            harmonoid-android-arm64-v8a-release.apk
+            harmonoid-android-armeabi-v7a-release.apk
+            harmonoid-android-x86_64-release.apk
+          token: ${{ secrets.ACCESS_TOKEN_2 }}
+
+      - name: Apply Google Play Patch
+        run: |
+          cd external/harmonoid_visual_assets
+          git fetch && git reset --hard origin/master
+          cd ../..
+          git apply --reject --whitespace=fix patches/google-play.patch
+          rm -r lib/web
+
+      - run: flutter build apk --verbose --split-per-abi
+      - run: cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk harmonoid-android-google-play-arm64-v8a-release.apk
+      - run: cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk harmonoid-android-google-play-armeabi-v7a-release.apk
+      - run: cp build/app/outputs/flutter-apk/app-x86_64-release.apk harmonoid-android-google-play-x86_64-release.apk
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_REPOSITORY: alexmercerind2/_
+        with:
+          repository: alexmercerind2/_
+          draft: true
+          prerelease: false
+          body: ""
+          tag_name: "vnext"
+          files: |
+            harmonoid-android-google-play-arm64-v8a-release.apk
+            harmonoid-android-google-play-armeabi-v7a-release.apk
+            harmonoid-android-google-play-x86_64-release.apk
+          token: ${{ secrets.ACCESS_TOKEN_2 }}

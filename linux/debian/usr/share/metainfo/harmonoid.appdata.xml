@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+	<id>harmonoid</id>
+	<name>Harmonoid</name>
+	<!-- <summary>Plays &amp; manages your music library. Looks beautiful & juicy.</summary> -->
+	<metadata_license>CC0-1.0</metadata_license>
+	<project_license>LicenseRef-proprietary=https://github.com/harmonoid/harmonoid/blob/master/EULA.txt</project_license>
+	<recommends>
+		<control>pointing</control>
+		<control>keyboard</control>
+		<control>touch</control>
+	</recommends>
+	<developer_name>Hitesh Kumar Saini</developer_name>
+	<!-- TODO: Update details. -->
+	<!-- <url type="homepage">https://github.com/harmonoid/harmonoid</url>
+	<url type="donation">https://alexmercerind.github.io/donate</url>
+	<url type="contact">https://discord.gg/2Rc3edFWd8</url>
+	<description>
+		<p>Plays &amp; manages your music library. Looks beautiful & juicy.</p>
+		<p></p>
+		<p>Current Features</p>
+		<ul>
+			<li></li>
+		</ul>
+		<p></p>
+		<p>Upcoming Features</p>
+		<ul>
+			<li></li>
+		</ul>
+	</description>
+	<screenshots>
+		<screenshot>
+			<image type="source">https://github.com/harmonoid/harmonoid/blob/assets/harmonoid_W8Oi1qPZ0O.webp?raw=true</image>
+			<image type="source">https://github.com/harmonoid/harmonoid/blob/assets/harmonoid_MOnywQpgPB.webp?raw=true</image>
+			<image type="source">https://github.com/harmonoid/harmonoid/blob/assets/harmonoid_BRfMT0wIX6.webp?raw=true</image>
+			<image type="source">https://github.com/harmonoid/harmonoid/blob/assets/harmonoid_zZZ1d0yO5G.webp?raw=true</image>
+			<image type="source">https://github.com/harmonoid/harmonoid/blob/assets/harmonoid_yFdqibq6DF.webp?raw=true</image>
+		</screenshot>
+	</screenshots> -->
+	<launchable type="desktop-id">harmonoid.desktop</launchable>
+	<releases>
+		<release version="0.3.4" date="2022-11-11" />
+		<release version="0.3.3" date="2022-09-21" />
+		<release version="0.3.2" date="2022-09-19" />
+		<release version="0.3.1" date="2022-09-19" />
+		<release version="0.3.0" date="2022-09-04" />
+		<release version="0.2.9" date="2022-08-30" />
+		<release version="0.2.6" date="2022-07-17" />
+		<release version="0.2.5" date="2022-07-13" />
+		<release version="0.2.2" date="2022-03-24" />
+		<release version="0.2.1" date="2022-02-18" />
+		<release version="0.1.7" date="2021-09-22" />
+		<release version="0.1.6" date="2021-09-21" />
+		<release version="0.1.5" date="2021-09-17" />
+		<release version="0.1.4" date="2021-09-16" />
+		<release version="0.1.3" date="2021-09-15" />
+	</releases>
+	<content_rating type="oars-1.0" />
+	<update_contact>alexmercerind@gmail.com</update_contact>
+</component>
